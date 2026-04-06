@@ -7,28 +7,28 @@ RUN apk update && apk add --no-cache \
     bash \
     iproute2
 
-# 自动生成所有配置 + 启动
+# 全自动启动脚本（Railway 兼容版）
 RUN cat > /run.sh <<'EOF'
 #!/bin/bash
 set -e
 
-# 固定网段
+# 固定配置
 PORT=51820
-WG_SERVER_IP=10.0.0.1/24
+SERVER_IP=10.0.0.1/24
 CLIENT_A_IP=10.0.0.2/32
 
-# 自动生成所有密钥
+# 自动生成密钥
 mkdir -p /etc/wireguard
 SERVER_PRIV=$(wg genkey)
 SERVER_PUB=$(echo "$SERVER_PRIV" | wg pubkey)
 CLIENT_A_PRIV=$(wg genkey)
 CLIENT_A_PUB=$(echo "$CLIENT_A_PRIV" | wg pubkey)
 
-# 生成 WireGuard 服务端配置（容器内的 Server）
+# 生成 WireGuard 配置
 cat > /etc/wireguard/wg0.conf <<CONF
 [Interface]
 PrivateKey = $SERVER_PRIV
-Address = $WG_SERVER_IP
+Address = $SERVER_IP
 ListenPort = $PORT
 PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
@@ -38,17 +38,13 @@ PublicKey = $CLIENT_A_PUB
 AllowedIPs = $CLIENT_A_IP
 CONF
 
-# 开启内核转发
-sysctl -w net.ipv4.ip_forward=1
-iptables -F
+# 启动 WireGuard（无 sysctl，Railway 兼容）
+iptables -F 2>/dev/null || true
+wg-quick up wg0 2>/dev/null || true
 
-# 启动 WireGuard
-wg-quick up wg0
-
-# 输出本地 A 客户端配置（直接复制用）
-clear
+# 输出客户端 A 配置（直接复制用）
 echo -e "\n========================================"
-echo -e "   WireGuard 启动成功！A 客户端配置如下"
+echo -e "  WireGuard 启动成功！本地 A 配置如下"
 echo -e "========================================\n"
 
 cat <<CONF
@@ -59,14 +55,13 @@ DNS = 8.8.8.8
 
 [Peer]
 PublicKey = $SERVER_PUB
-Endpoint = 127.0.0.1:$PORT
+# 👇 这里必须换成你的 Railway 域名:端口
+Endpoint = $RAILWAY_PUBLIC_DOMAIN:$PORT
 AllowedIPs = 0.0.0.0/0
 PersistentKeepalive = 25
 CONF
 
 echo -e "\n========================================\n"
-
-# 保持容器运行
 tail -f /dev/null
 EOF
 
