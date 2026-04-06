@@ -10,18 +10,14 @@ RUN wget -O frp.tar.gz https://github.com/fatedier/frp/releases/download/v0.59.0
     && cd frp_* \
     && cp frps frpc /usr/bin/
 
-# --------------------------
-# 服务端 FRP
-# --------------------------
+# 服务端 FRP 配置
 RUN cat > frps.ini << EOF
 [common]
 bind_port = 7000
 token = railway_frp_123
 EOF
 
-# --------------------------
-# 客户端 B —— 提供代理
-# --------------------------
+# 客户端B 配置（提供代理）
 RUN cat > frpc.ini << EOF
 [common]
 server_addr = 127.0.0.1
@@ -35,9 +31,7 @@ local_port = 1080
 remote_port = 10800
 EOF
 
-# --------------------------
-# 客户端 B 内置代理
-# --------------------------
+# 客户端B 内置 SOCKS5 代理配置
 RUN cat > /etc/sockd.conf << EOF
 internal: 127.0.0.1 port = 1080
 external: lo
@@ -47,17 +41,19 @@ user.privileged: root
 user.notprivileged: nobody
 EOF
 
-# --------------------------
-# 启动
-# --------------------------
-RUN cat > start.sh << EOF
+# 启动脚本（路径已修正）
+RUN cat > /app/start.sh << EOF
 #!/bin/sh
 sockd -D
 frps -c frps.ini &
 frpc -c frpc.ini
 EOF
 
-RUN chmod +x start.sh
+# 赋予执行权限
+RUN chmod +x /app/start.sh
+
+# 暴露端口
 EXPOSE 7000 10800
 
-CMD ["/start.sh"]
+# 执行路径已修正为 /app/start.sh
+CMD ["/app/start.sh"]
